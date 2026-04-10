@@ -1,105 +1,151 @@
-import pandas as pd
-import string
-import nltk
+import json
 import pickle
 import re
 import unicodedata
+from pathlib import Path
 
-from nltk.corpus import stopwords
-from sklearn.model_selection import train_test_split
+import nltk
+import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
-
-# Models
-from sklearn.naive_bayes import MultinomialNB
-from sklearn.svm import SVC
-from sklearn.neighbors import KNeighborsClassifier
-
-# Metrics
+from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, classification_report
+from sklearn.model_selection import train_test_split
+from sklearn.naive_bayes import MultinomialNB
+from sklearn.svm import LinearSVC
 
-nltk.download('stopwords')
+nltk.download("stopwords")
 
-stop_words = set(stopwords.words('english'))
+BASE_DIR = Path(__file__).resolve().parent
 
-# Load dataset
-df = pd.read_csv("spam.csv", encoding='latin-1')
-df = df[['v1', 'v2']]
-df.columns = ['label', 'message']
-
-df['label'] = df['label'].map({'ham': 0, 'spam': 1})
-
-# 🔥 Homoglyph mapping
 HOMOGLYPH_MAP = {
-    'а': 'a', 'е': 'e', 'о': 'o', 'р': 'p', 'с': 'c', 'і': 'i', 'ѕ': 's',
-    'Α': 'A', 'Β': 'B', 'Ε': 'E', 'Ζ': 'Z', 'Κ': 'K', 'Μ': 'M', 'Ν': 'N',
-    'О': 'O', 'Ρ': 'P', 'Τ': 'T', 'Χ': 'X'
+    "а": "a",
+    "е": "e",
+    "о": "o",
+    "р": "p",
+    "с": "c",
+    "і": "i",
+    "ѕ": "s",
+    "Α": "A",
+    "Β": "B",
+    "Ε": "E",
+    "Ζ": "Z",
+    "Κ": "K",
+    "Μ": "M",
+    "Ν": "N",
+    "О": "O",
+    "Ρ": "P",
+    "Τ": "T",
+    "Χ": "X",
 }
+
 
 def replace_homoglyphs(text):
-    return ''.join(HOMOGLYPH_MAP.get(c, c) for c in text)
+    return "".join(HOMOGLYPH_MAP.get(c, c) for c in text)
 
-# 🔥 ADVANCED PREPROCESSING
+
 def preprocess(text):
-    # Normalize
-    text = unicodedata.normalize('NFKD', text)
-
-    # 🔥 Replace homoglyphs
+    text = unicodedata.normalize("NFKD", str(text))
     text = replace_homoglyphs(text)
-
-    # Lowercase
     text = text.lower()
-
-    # Replace common obfuscations
     text = text.replace("0", "o").replace("1", "i").replace("3", "e")
-
-    # Remove special characters
-    text = re.sub(r'[^a-z0-9\s]', '', text)
-
+    text = re.sub(r"[^a-z0-9\s]", " ", text)
+    text = re.sub(r"\s+", " ", text).strip()
     return text
-df['message'] = df['message'].apply(preprocess)
 
-# 🔥 N-GRAM FEATURE EXTRACTION (Fix signal dilution)
-vectorizer = TfidfVectorizer(analyzer='char', ngram_range=(2,4))
-X = vectorizer.fit_transform(df['message'])
-y = df['label']
 
-# Split
-X_train, X_test, y_train, y_test = train_test_split(
-    X, y, test_size=0.2, random_state=42
+df = pd.read_csv(BASE_DIR / "spam.csv", encoding="latin-1")
+df = df[["v1", "v2"]]
+df.columns = ["label", "message"]
+df["label"] = df["label"].map({"ham": 0, "spam": 1})
+df["message"] = df["message"].apply(preprocess)
+
+X_train_text, X_test_text, y_train, y_test = train_test_split(
+    df["message"],
+    df["label"],
+    test_size=0.2,
+    random_state=42,
+    stratify=df["label"],
 )
 
-# Models
-models = {
-    "Naive Bayes": MultinomialNB(),
-    "SVM": SVC(kernel='linear', probability=True),
-    "KNN": KNeighborsClassifier(n_neighbors=5)
-}
+candidates = [
+    (
+        "LinearSVC_char_3_5",
+        TfidfVectorizer(
+            analyzer="char_wb",
+            ngram_range=(3, 5),
+            min_df=2,
+            sublinear_tf=True,
+        ),
+        LinearSVC(C=1.2),
+    ),
+    (
+        "LogReg_word_1_2",
+        TfidfVectorizer(
+            analyzer="word",
+            ngram_range=(1, 2),
+            min_df=2,
+            sublinear_tf=True,
+            stop_words="english",
+        ),
+        LogisticRegression(max_iter=300, C=2.0),
+    ),
+    (
+        "MultinomialNB_word_1_2",
+        TfidfVectorizer(
+            analyzer="word",
+            ngram_range=(1, 2),
+            min_df=2,
+            sublinear_tf=True,
+            stop_words="english",
+        ),
+        MultinomialNB(alpha=0.2),
+    ),
+]
 
+best_name = None
+best_vectorizer = None
 best_model = None
-best_accuracy = 0
-results = {}
+best_accuracy = -1.0
+best_report = ""
 
-print("\n🔍 Model Comparison:\n")
+print("\nModel comparison:\n")
+for name, vectorizer, model in candidates:
+    X_train = vectorizer.fit_transform(X_train_text)
+    X_test = vectorizer.transform(X_test_text)
 
-# Train and evaluate
-for name, model in models.items():
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
 
-    acc = accuracy_score(y_test, y_pred)
-    results[name] = acc
+    accuracy = accuracy_score(y_test, y_pred)
+    report = classification_report(y_test, y_pred)
 
-    print(f"{name} Accuracy: {acc:.4f}")
-    print(classification_report(y_test, y_pred))
+    print(f"{name} accuracy: {accuracy:.4f}")
+    print(report)
     print("-" * 50)
 
-    if acc > best_accuracy:
-        best_accuracy = acc
+    if accuracy > best_accuracy:
+        best_name = name
+        best_vectorizer = vectorizer
         best_model = model
+        best_accuracy = accuracy
+        best_report = report
 
-# Save best model
-pickle.dump(best_model, open("model.pkl", "wb"))
-pickle.dump(vectorizer, open("vectorizer.pkl", "wb"))
+pickle.dump(best_model, open(BASE_DIR / "model.pkl", "wb"))
+pickle.dump(best_vectorizer, open(BASE_DIR / "vectorizer.pkl", "wb"))
 
-print("\n✅ Best Model Saved!")
-print(f"🏆 Best Accuracy: {best_accuracy:.4f}")
+with open(BASE_DIR / "metrics.json", "w", encoding="utf-8") as f:
+    json.dump(
+        {
+            "accuracy": round(float(best_accuracy), 4),
+            "model_name": best_name,
+            "test_size": len(y_test),
+        },
+        f,
+        indent=2,
+    )
+
+print("\nBest model saved")
+print(f"Winner: {best_name}")
+print(f"Best accuracy: {best_accuracy:.4f}")
+print("\nBest classification report:\n")
+print(best_report)

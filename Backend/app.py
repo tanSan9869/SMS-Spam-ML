@@ -16,6 +16,27 @@ CORS(app)
 
 BASE_DIR = Path(__file__).resolve().parent
 
+HOMOGLYPH_MAP = {
+    "а": "a",
+    "е": "e",
+    "о": "o",
+    "р": "p",
+    "с": "c",
+    "і": "i",
+    "ѕ": "s",
+    "Α": "A",
+    "Β": "B",
+    "Ε": "E",
+    "Ζ": "Z",
+    "Κ": "K",
+    "Μ": "M",
+    "Ν": "N",
+    "О": "O",
+    "Ρ": "P",
+    "Τ": "T",
+    "Χ": "X",
+}
+
 # Load model and vectorizer
 model = pickle.load(open(BASE_DIR / "model.pkl", "rb"))
 vectorizer = pickle.load(open(BASE_DIR / "vectorizer.pkl", "rb"))
@@ -26,11 +47,17 @@ try:
 except (FileNotFoundError, ValueError, TypeError, json.JSONDecodeError):
     model_accuracy = None
 
+
+def replace_homoglyphs(text):
+    return "".join(HOMOGLYPH_MAP.get(c, c) for c in text)
+
 def preprocess(text):
-    text = unicodedata.normalize('NFKD', text)
+    text = unicodedata.normalize('NFKD', str(text))
+    text = replace_homoglyphs(text)
     text = text.lower()
     text = text.replace("0", "o").replace("1", "i").replace("3", "e")
-    text = re.sub(r'[^a-z0-9\s]', '', text)
+    text = re.sub(r'[^a-z0-9\s]', ' ', text)
+    text = re.sub(r'\s+', ' ', text).strip()
     return text
 
 @app.route("/predict", methods=["POST"])

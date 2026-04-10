@@ -1,1 +1,5 @@
-{"accuracy": 0.965}
+{
+  "accuracy": 0.9901,
+  "model_name": "LinearSVC_char_3_5",
+  "test_size": 1115
+}
