@@ -1,5 +1,3 @@
-Msg,Label
-Existing message example 1,spam
-Existing message example 2,ham
-New message example from India 1,spam
-New message example from India 2,ham
+v1,v2,,,
+spam,This is a spam message.
+ham,This is a ham message.
