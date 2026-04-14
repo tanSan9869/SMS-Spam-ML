@@ -1,0 +1,28 @@
+{
+  "dataset": "phishing_legit_dataset_KD_10000.csv",
+  "dataset_path": "C:\\Users\\gaura\\Desktop\\ML_Project\\Backend\\phishing_legit_dataset_KD_10000.csv",
+  "text_col": "text",
+  "label_col": "label",
+  "rows": 10000,
+  "class_distribution": {
+    "0": 4000,
+    "1": 6000
+  },
+  "model_name": "LinearSVC_char_3_5",
+  "accuracy": 1.0,
+  "cv_mean_accuracy": 1.0,
+  "cv_scores": [
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0
+  ],
+  "best_params": {},
+  "test_size": 2000,
+  "cv_folds": 5,
+  "finetune": false,
+  "use_stopwords": true,
+  "use_homoglyph": true,
+  "balance_strategy": "balanced"
+}
