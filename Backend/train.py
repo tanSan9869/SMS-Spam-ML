@@ -4,9 +4,7 @@ import pickle
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-import nltk
 import pandas as pd
-from nltk.corpus import stopwords
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, classification_report
@@ -14,8 +12,6 @@ from sklearn.model_selection import GridSearchCV, cross_val_score, train_test_sp
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.pipeline import Pipeline
 from sklearn.svm import LinearSVC
-
-from preprocessing import preprocess_text as base_preprocess_text
 
 BASE_DIR = Path(__file__).resolve().parent
 DEFAULT_DATASET = "spam.csv"
@@ -70,18 +66,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--test_size", type=float, default=0.2, help="Test split ratio")
     parser.add_argument("--random_state", type=int, default=42, help="Random state")
     parser.add_argument("--cv_folds", type=int, default=5, help="Cross-validation folds")
-    parser.add_argument(
-        "--use_stopwords",
-        type=str2bool,
-        default=True,
-        help="Enable stopword removal in preprocessing",
-    )
-    parser.add_argument(
-        "--use_homoglyph",
-        type=str2bool,
-        default=True,
-        help="Enable homoglyph normalization",
-    )
     parser.add_argument(
         "--balance_strategy",
         choices=["balanced", "none"],
@@ -179,36 +163,6 @@ def normalize_labels(raw_labels: pd.Series) -> pd.Series:
     return normalized.map(mapping)
 
 
-def preprocess_text_series(
-    text_series: pd.Series,
-    use_stopwords: bool,
-    use_homoglyph: bool,
-    stopword_set: Optional[set],
-) -> pd.Series:
-    return text_series.apply(
-        lambda value: preprocess_text(
-            value,
-            use_stopwords=use_stopwords,
-            use_homoglyph=use_homoglyph,
-            stopword_set=stopword_set,
-        )
-    )
-
-
-def preprocess_text(
-    text: object,
-    use_stopwords: bool,
-    use_homoglyph: bool,
-    stopword_set: Optional[set],
-) -> str:
-    return base_preprocess_text(
-        text,
-        use_stopwords=use_stopwords,
-        use_homoglyph=use_homoglyph,
-        stopword_set=stopword_set,
-    )
-
-
 def load_data(args: argparse.Namespace) -> Tuple[pd.Series, pd.Series, Dict[str, object]]:
     dataset_path = resolve_dataset_path(args.dataset)
     if not dataset_path.exists():
@@ -229,15 +183,6 @@ def load_data(args: argparse.Namespace) -> Tuple[pd.Series, pd.Series, Dict[str,
     y = normalize_labels(selected[label_col])
     aligned = selected.loc[y.index].copy()
 
-    nltk.download("stopwords", quiet=True)
-    stopword_set = set(stopwords.words("english")) if args.use_stopwords else None
-    aligned[text_col] = preprocess_text_series(
-        aligned[text_col],
-        use_stopwords=args.use_stopwords,
-        use_homoglyph=args.use_homoglyph,
-        stopword_set=stopword_set,
-    )
-    aligned = aligned[aligned[text_col] != ""]
     y = y.loc[aligned.index]
 
     if y.nunique() != 2:
@@ -492,8 +437,6 @@ def save_outputs(training_output: Dict[str, object], args: argparse.Namespace) -
         "test_size": training_output["test_size"],
         "cv_folds": training_output["cv_folds"],
         "finetune": bool(args.finetune),
-        "use_stopwords": bool(args.use_stopwords),
-        "use_homoglyph": bool(args.use_homoglyph),
         "balance_strategy": args.balance_strategy,
     }
     with open(metrics_path, "w", encoding="utf-8") as file:
